@@ -1,1 +1,0 @@
-# tqqq-dca-backtest

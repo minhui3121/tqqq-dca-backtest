@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,35 +14,10 @@ class Symbols:
     benchmark: str = "^NDX"
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Download TQQQ and Nasdaq-100 data from Yahoo Finance, then backfill "
-            "TQQQ prices before inception using the leveraged daily return formula."
-        )
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="data",
-        help="Directory where raw and processed CSV files will be saved.",
-    )
-    parser.add_argument(
-        "--daily-fee",
-        type=float,
-        default=0.0005,
-        help="Daily fee to subtract from the leveraged daily return (default: 0.0005).",
-    )
-    parser.add_argument(
-        "--start-date",
-        default="1985-10-01",
-        help="Earliest Yahoo Finance date to request for the Nasdaq-100 series.",
-    )
-    parser.add_argument(
-        "--end-date",
-        default="2026-01-01",
-        help="End date in YYYY-MM-DD format. Defaults to 2026-01-01.",
-    )
-    return parser.parse_args()
+OUTPUT_DIR = Path("data")
+DAILY_FEE = 0.0005
+START_DATE = "1985-10-01"
+END_DATE = "2026-01-01"
 
 
 def download_history(symbol: str, start_date: str, end_date: str | None) -> pd.DataFrame:
@@ -159,20 +133,17 @@ def write_csvs(output_dir: Path, benchmark: pd.DataFrame, leverage: pd.DataFrame
 
 
 def main() -> None:
-    args = parse_args()
-    output_dir = Path(args.output_dir)
-
     symbols = Symbols()
-    benchmark = download_history(symbols.benchmark, args.start_date, args.end_date)
-    leverage = download_history(symbols.leverage, "2010-02-11", args.end_date)
-    combined = build_backfilled_series(benchmark, leverage, args.daily_fee)
-    write_csvs(output_dir, benchmark, leverage, combined)
+    benchmark = download_history(symbols.benchmark, START_DATE, END_DATE)
+    leverage = download_history(symbols.leverage, "2010-02-11", END_DATE)
+    combined = build_backfilled_series(benchmark, leverage, DAILY_FEE)
+    write_csvs(OUTPUT_DIR, benchmark, leverage, combined)
 
     earliest = combined.iloc[0]["date"]
     latest = combined.iloc[-1]["date"]
-    print(f"Saved raw benchmark data to {output_dir / 'raw' / 'nasdaq_100_yahoo.csv'}")
-    print(f"Saved raw TQQQ data to {output_dir / 'raw' / 'tqqq_yahoo.csv'}")
-    print(f"Saved backfilled series to {output_dir / 'processed' / 'tqqq_backfilled.csv'}")
+    print(f"Saved raw benchmark data to {OUTPUT_DIR / 'raw' / 'nasdaq_100_yahoo.csv'}")
+    print(f"Saved raw TQQQ data to {OUTPUT_DIR / 'raw' / 'tqqq_yahoo.csv'}")
+    print(f"Saved backfilled series to {OUTPUT_DIR / 'processed' / 'tqqq_backfilled.csv'}")
     print(f"Backfilled series covers {earliest} through {latest}.")
 
 

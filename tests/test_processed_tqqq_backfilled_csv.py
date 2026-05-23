@@ -19,7 +19,7 @@ COMMON_ROWS = {
     "2025-12-31": (54.13, 52.72),
 }
 
-ENGINEERED_FIRST_ROW = {
+ENGINEERED_ROWS = {
     # Engineered row: 2010-02-10, derived from raw rows
     #   NDX 2010-02-09 close = 1753.8399658203125
     #   NDX 2010-02-10 open  = 1752.4599609375
@@ -54,9 +54,21 @@ ENGINEERED_FIRST_ROW = {
     #   close[2010-02-10] = 0.2071360821958071
     #   overnight_factor(2010-02-10) = 0.9972214471095546
     #   open[2010-02-10] = 0.20809983873061952
-    "0%": ("2010-02-10", 0.2080161548942335, 0.2070531895684367),
-    "5%": ("2010-02-10", 0.2080568911599959, 0.2070935407256098),
-    "10%": ("2010-02-10", 0.20809983873061957, 0.20713608219580715),
+    "0%": [
+        ("2010-02-08", 0.205121975058992, 0.2018891961799838),
+        ("2010-02-09", 0.2093602034802477, 0.208508347814395),
+        ("2010-02-10", 0.2080161548942335, 0.2070531895684367),
+    ],
+    "5%": [
+        ("2010-02-08", 0.20524512490099941, 0.2020097442842208),
+        ("2010-02-09", 0.20944409867291794, 0.20859173436377207),
+        ("2010-02-10", 0.2080568911599959, 0.2070935407256098),
+    ],
+    "10%": [
+        ("2010-02-08", 0.205375014251666, 0.20213688893549767),
+        ("2010-02-09", 0.20953256700642656, 0.20867966622037337),
+        ("2010-02-10", 0.20809983873061957, 0.20713608219580715),
+    ],
 }
 
 
@@ -101,12 +113,12 @@ class TestProcessedTqqqBackfilledCsv(unittest.TestCase):
                 for date, (expected_open, expected_close) in COMMON_ROWS.items():
                     self.assert_row_matches(frame, date, expected_open, expected_close)
 
-    def test_first_engineered_date_matches_known_values(self) -> None:
+    def test_engineered_dates_match_known_values(self) -> None:
         for label, path in PROCESSED_FILES.items():
             with self.subTest(fee=label):
                 frame = self.load_frame(path)
-                date, expected_open, expected_close = ENGINEERED_FIRST_ROW[label]
-                self.assert_row_matches_exact(frame, date, expected_open, expected_close)
+                for date, expected_open, expected_close in ENGINEERED_ROWS[label]:
+                    self.assert_row_matches_exact(frame, date, expected_open, expected_close)
 
 
 if __name__ == "__main__":

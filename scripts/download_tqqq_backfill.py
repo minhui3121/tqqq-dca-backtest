@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--start-date",
-        default="1986-01-01",
+        default="1985-10-01",
         help="Earliest Yahoo Finance date to request for the Nasdaq-100 series.",
     )
     parser.add_argument(

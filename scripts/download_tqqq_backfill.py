@@ -155,7 +155,7 @@ def write_csvs(output_dir: Path, benchmark: pd.DataFrame, leverage: pd.DataFrame
     raw_dir.mkdir(parents=True, exist_ok=True)
     processed_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_columns = ["Open", "High", "Low", "Close", "Adj Close"]
+    raw_columns = ["Open", "Close"]
     benchmark.reindex(columns=raw_columns).to_csv(raw_dir / "nasdaq_100_yahoo.csv", index_label="date")
     leverage.reindex(columns=raw_columns).to_csv(raw_dir / "tqqq_yahoo.csv", index_label="date")
     combined.to_csv(processed_dir / "tqqq_backfilled.csv", index=False)

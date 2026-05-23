@@ -63,16 +63,15 @@ def build_backfilled_series(
     leverage: pd.DataFrame,
     daily_fee: float,
 ) -> pd.DataFrame:
-    _, benchmark_close = pick_price_columns(benchmark)
+    benchmark_open, benchmark_close = pick_price_columns(benchmark)
     leverage_open, leverage_close = pick_price_columns(leverage)
 
+    benchmark_open = benchmark_open.rename("ndx_open")
     benchmark_close = benchmark_close.rename("ndx_close")
     leverage_open = leverage_open.rename("tqqq_actual_open")
     leverage_close = leverage_close.rename("tqqq_actual_close")
 
-    merged = pd.concat([benchmark_close, leverage_open, leverage_close], axis=1, join="outer").sort_index()
-    merged["ndx_daily_return"] = merged["ndx_close"].pct_change()
-    merged["leveraged_growth_factor"] = 1.0 + (merged["ndx_daily_return"] * 3.0) - daily_fee
+    merged = pd.concat([benchmark_open, benchmark_close, leverage_open, leverage_close], axis=1, join="outer").sort_index()
 
     merged["tqqq_modeled_open"] = np.nan
     merged["tqqq_modeled_close"] = np.nan
@@ -95,22 +94,44 @@ def build_backfilled_series(
     dates = merged.index.to_list()
     model_open_values = merged["tqqq_modeled_open"].astype(float).to_numpy(copy=True)
     model_close_values = merged["tqqq_modeled_close"].astype(float).to_numpy(copy=True)
-    factor_values = merged["leveraged_growth_factor"].astype(float).to_numpy(copy=True)
+
+    ndx_open_values = merged["ndx_open"].astype(float).to_numpy(copy=True)
+    ndx_close_values = merged["ndx_close"].astype(float).to_numpy(copy=True)
 
     for position in range(anchor_pos - 1, -1, -1):
         next_position = position + 1
-        factor = factor_values[next_position]
-        if pd.isna(factor):
+
+        # Overnight factor from close_{pos} -> open_{next_position}:
+        # open_next = close_pos * (1 + 3 * (ndx_open_next/ndx_close_pos - 1) - daily_fee)
+        ndx_close_pos = ndx_close_values[position]
+        ndx_open_next = ndx_open_values[next_position]
+        if pd.isna(ndx_close_pos) or pd.isna(ndx_open_next):
             raise RuntimeError(
-                f"Missing Nasdaq-100 return for {dates[next_position].date()} while backfilling TQQQ."
-            )
-        if factor <= 0:
-            raise RuntimeError(
-                f"Non-positive leveraged growth factor {factor} on {dates[next_position].date()}."
+                f"Missing NDX open/close for {dates[position].date()} or {dates[next_position].date()} while backfilling TQQQ."
             )
 
-        model_open_values[position] = model_open_values[next_position] / factor
-        model_close_values[position] = model_close_values[next_position] / factor
+        overnight_return = (ndx_open_next / ndx_close_pos) - 1.0
+        overnight_factor = 1.0 + (overnight_return * 3.0) - daily_fee
+        if overnight_factor <= 0 or pd.isna(overnight_factor):
+            raise RuntimeError(
+                f"Invalid overnight leveraged factor {overnight_factor} for {dates[next_position].date()}"
+            )
+
+        # Recover previous close from next day's open
+        model_close_values[position] = model_open_values[next_position] / overnight_factor
+
+        # Intraday factor on the same day to get open from close:
+        # close_pos = open_pos * (1 + 3 * (ndx_close_pos/ndx_open_pos - 1) - daily_fee)
+        ndx_open_pos = ndx_open_values[position]
+        if pd.isna(ndx_open_pos):
+            raise RuntimeError(f"Missing NDX open for {dates[position].date()} while backfilling TQQQ.")
+
+        intraday_return = (ndx_close_pos / ndx_open_pos) - 1.0
+        intraday_factor = 1.0 + (intraday_return * 3.0) - daily_fee
+        if intraday_factor <= 0 or pd.isna(intraday_factor):
+            raise RuntimeError(f"Invalid intraday leveraged factor {intraday_factor} for {dates[position].date()}")
+
+        model_open_values[position] = model_close_values[position] / intraday_factor
 
     merged["tqqq_modeled_open"] = model_open_values
     merged["tqqq_modeled_close"] = model_close_values

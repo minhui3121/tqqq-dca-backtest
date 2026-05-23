@@ -71,12 +71,11 @@ def download_history(symbol: str, start_date: str, end_date: str | None) -> pd.D
     return frame.sort_index()
 
 
-def pick_price_column(frame: pd.DataFrame) -> pd.Series:
-    if "Close" in frame.columns:
-        return frame["Close"].astype(float)
-    if "Adj Close" in frame.columns:
-        return frame["Adj Close"].astype(float)
-    raise KeyError("Neither 'Close' nor 'Adj Close' is available in the downloaded data.")
+def pick_price_columns(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    if "Open" not in frame.columns or "Close" not in frame.columns:
+        raise KeyError("Both 'Open' and 'Close' must be available in the downloaded data.")
+
+    return frame["Open"].astype(float), frame["Close"].astype(float)
 
 
 def build_backfilled_series(
@@ -84,16 +83,19 @@ def build_backfilled_series(
     leverage: pd.DataFrame,
     daily_fee: float,
 ) -> pd.DataFrame:
-    benchmark_prices = pick_price_column(benchmark).rename("ndx_close")
-    leverage_prices = pick_price_column(leverage).rename("tqqq_actual_close")
+    _, benchmark_close = pick_price_columns(benchmark)
+    leverage_open, leverage_close = pick_price_columns(leverage)
 
-    merged = pd.concat([benchmark_prices, leverage_prices], axis=1, join="outer").sort_index()
+    benchmark_close = benchmark_close.rename("ndx_close")
+    leverage_open = leverage_open.rename("tqqq_actual_open")
+    leverage_close = leverage_close.rename("tqqq_actual_close")
+
+    merged = pd.concat([benchmark_close, leverage_open, leverage_close], axis=1, join="outer").sort_index()
     merged["ndx_daily_return"] = merged["ndx_close"].pct_change()
     merged["leveraged_growth_factor"] = 1.0 + (merged["ndx_daily_return"] * 3.0) - daily_fee
 
+    merged["tqqq_modeled_open"] = np.nan
     merged["tqqq_modeled_close"] = np.nan
-    merged["tqqq_source"] = "backfilled"
-    merged["backfilled_from_date"] = pd.NA
 
     anchor_date = merged["tqqq_actual_close"].first_valid_index()
     if anchor_date is None:
@@ -103,15 +105,16 @@ def build_backfilled_series(
     if isinstance(anchor_pos, slice):
         anchor_pos = anchor_pos.start
 
-    merged.iloc[anchor_pos:, merged.columns.get_loc("tqqq_modeled_close")] = merged.iloc[
-        anchor_pos:
-    ]["tqqq_actual_close"].to_numpy()
-    merged.iloc[anchor_pos:, merged.columns.get_loc("tqqq_source")] = "actual"
+    merged.iloc[anchor_pos:, merged.columns.get_loc("tqqq_modeled_open")] = merged.iloc[anchor_pos:][
+        "tqqq_actual_open"
+    ].to_numpy()
+    merged.iloc[anchor_pos:, merged.columns.get_loc("tqqq_modeled_close")] = merged.iloc[anchor_pos:][
+        "tqqq_actual_close"
+    ].to_numpy()
 
     dates = merged.index.to_list()
-    model_values = merged["tqqq_modeled_close"].astype(float).to_numpy(copy=True)
-    source_values = merged["tqqq_source"].astype(str).to_numpy(copy=True)
-    derived_from_values = merged["backfilled_from_date"].astype("object").to_numpy(copy=True)
+    model_open_values = merged["tqqq_modeled_open"].astype(float).to_numpy(copy=True)
+    model_close_values = merged["tqqq_modeled_close"].astype(float).to_numpy(copy=True)
     factor_values = merged["leveraged_growth_factor"].astype(float).to_numpy(copy=True)
 
     for position in range(anchor_pos - 1, -1, -1):
@@ -126,27 +129,21 @@ def build_backfilled_series(
                 f"Non-positive leveraged growth factor {factor} on {dates[next_position].date()}."
             )
 
-        model_values[position] = model_values[next_position] / factor
-        source_values[position] = "backfilled"
-        derived_from_values[position] = dates[next_position].date().isoformat()
+        model_open_values[position] = model_open_values[next_position] / factor
+        model_close_values[position] = model_close_values[next_position] / factor
 
-    merged["tqqq_modeled_close"] = model_values
-    merged["tqqq_source"] = source_values
-    merged["backfilled_from_date"] = derived_from_values
+    merged["tqqq_modeled_open"] = model_open_values
+    merged["tqqq_modeled_close"] = model_close_values
 
     output = merged.reset_index()
     output["date"] = output["date"].dt.date.astype(str)
     return output[
         [
             "date",
-            "ndx_close",
-            "ndx_daily_return",
-            "leveraged_growth_factor",
-            "tqqq_actual_close",
+            "tqqq_modeled_open",
             "tqqq_modeled_close",
-            "tqqq_source",
         ]
-    ]
+    ].rename(columns={"tqqq_modeled_open": "open", "tqqq_modeled_close": "close"})
 
 
 def write_csvs(output_dir: Path, benchmark: pd.DataFrame, leverage: pd.DataFrame, combined: pd.DataFrame) -> None:

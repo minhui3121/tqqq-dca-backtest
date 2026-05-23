@@ -76,6 +76,10 @@ def build_backfilled_series(
     merged["tqqq_modeled_open"] = np.nan
     merged["tqqq_modeled_close"] = np.nan
 
+    # close-only daily return and factor (used to backfill close values)
+    merged["ndx_daily_return"] = merged["ndx_close"].pct_change()
+    merged["close_based_factor"] = 1.0 + (merged["ndx_daily_return"] * 3.0) - daily_fee
+
     anchor_date = merged["tqqq_actual_close"].first_valid_index()
     if anchor_date is None:
         raise RuntimeError("Could not find any actual TQQQ rows to anchor the backfill.")
@@ -97,41 +101,42 @@ def build_backfilled_series(
 
     ndx_open_values = merged["ndx_open"].astype(float).to_numpy(copy=True)
     ndx_close_values = merged["ndx_close"].astype(float).to_numpy(copy=True)
+    close_factor_values = merged["close_based_factor"].astype(float).to_numpy(copy=True)
 
+    # Step A: backfill closes using close-to-close factor (the original method)
     for position in range(anchor_pos - 1, -1, -1):
         next_position = position + 1
-
-        # Overnight factor from close_{pos} -> open_{next_position}:
-        # open_next = close_pos * (1 + 3 * (ndx_open_next/ndx_close_pos - 1) - daily_fee)
-        ndx_close_pos = ndx_close_values[position]
-        ndx_open_next = ndx_open_values[next_position]
-        if pd.isna(ndx_close_pos) or pd.isna(ndx_open_next):
+        factor = close_factor_values[next_position]
+        if pd.isna(factor):
             raise RuntimeError(
-                f"Missing NDX open/close for {dates[position].date()} or {dates[next_position].date()} while backfilling TQQQ."
+                f"Missing Nasdaq-100 close return for {dates[next_position].date()} while backfilling TQQQ close."
+            )
+        if factor <= 0:
+            raise RuntimeError(
+                f"Non-positive close-based leveraged factor {factor} on {dates[next_position].date()}.")
+
+        model_close_values[position] = model_close_values[next_position] / factor
+
+    # Step B: compute opens using the overnight factor and the already backfilled close
+    # open_i = close_{i-1} * overnight_factor_i  (for i >= 1)
+    for position in range(1, anchor_pos):
+        # compute overnight factor for date at `position` which maps close_{pos-1} -> open_pos
+        prev_pos = position - 1
+        ndx_close_prev = ndx_close_values[prev_pos]
+        ndx_open_pos = ndx_open_values[position]
+        if pd.isna(ndx_close_prev) or pd.isna(ndx_open_pos):
+            raise RuntimeError(
+                f"Missing NDX open/close for {dates[prev_pos].date()} or {dates[position].date()} while backfilling TQQQ open."
             )
 
-        overnight_return = (ndx_open_next / ndx_close_pos) - 1.0
+        overnight_return = (ndx_open_pos / ndx_close_prev) - 1.0
         overnight_factor = 1.0 + (overnight_return * 3.0) - daily_fee
         if overnight_factor <= 0 or pd.isna(overnight_factor):
-            raise RuntimeError(
-                f"Invalid overnight leveraged factor {overnight_factor} for {dates[next_position].date()}"
-            )
+            raise RuntimeError(f"Invalid overnight leveraged factor {overnight_factor} for {dates[position].date()}")
 
-        # Recover previous close from next day's open
-        model_close_values[position] = model_open_values[next_position] / overnight_factor
+        model_open_values[position] = model_close_values[prev_pos] * overnight_factor
 
-        # Intraday factor on the same day to get open from close:
-        # close_pos = open_pos * (1 + 3 * (ndx_close_pos/ndx_open_pos - 1) - daily_fee)
-        ndx_open_pos = ndx_open_values[position]
-        if pd.isna(ndx_open_pos):
-            raise RuntimeError(f"Missing NDX open for {dates[position].date()} while backfilling TQQQ.")
-
-        intraday_return = (ndx_close_pos / ndx_open_pos) - 1.0
-        intraday_factor = 1.0 + (intraday_return * 3.0) - daily_fee
-        if intraday_factor <= 0 or pd.isna(intraday_factor):
-            raise RuntimeError(f"Invalid intraday leveraged factor {intraday_factor} for {dates[position].date()}")
-
-        model_open_values[position] = model_close_values[position] / intraday_factor
+    # Keep the first row's open as NaN if it couldn't be computed (no previous close)
 
     merged["tqqq_modeled_open"] = model_open_values
     merged["tqqq_modeled_close"] = model_close_values

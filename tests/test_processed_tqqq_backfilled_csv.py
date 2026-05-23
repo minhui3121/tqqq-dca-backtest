@@ -50,37 +50,36 @@ ENGINEERED_FIRST_ROW = {
     #   ndx_open (2010-02-10 open) = 1752.4599609375
     #   tqqq_open_next (2010-02-11 actual open) = 0.20343799889087677
     #
-    # Using these values the backfill yields (rounded here for readability):
+    # Using these values the backfill yields the following exact intermediates
+    # (these numbers were computed from the raw CSVs and match the produced
+    # processed CSVs):
+    #
     # - ANNUAL_FEE = 0%  -> daily_fee = 0.0
-    #   overnight_return = 1747.550048828125/1749.760009765625 - 1
-    #                    ≈ -0.001262931
-    #   overnight_factor ≈ 1 + 3*(-0.001262931) - 0 = 0.996211207
-    #   model_close_prev = 0.20343799889087677 / 0.996211207
-    #                    = 0.20421176217532735
-    #   intraday_return = 1749.760009765625/1752.4599609375 - 1
-    #                    ≈ -0.001529102
-    #   intraday_factor ≈ 1 + 3*(-0.001529102) - 0 = 0.995412694
-    #   model_open_prev = 0.20421176217532735 / 0.995412694
-    #                  = 0.20516000981797294
+    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
+    #   close_based_factor at next = 1.0445432179106033
+    #   model_close_prev (2010-02-10 close) = 0.20705318956843666
+    #   overnight_return for 2010-02-10 = -0.0007868476655262802
+    #   overnight_factor for 2010-02-10 = 0.9976394570034212
+    #   model_open_prev (2010-02-10 open) = 0.20801615489423345
     #
-    # - ANNUAL_FEE = 5%  -> daily_fee = 0.0002035241051569680881677597
-    #   overnight_return = -0.0012630080269099403559388795
-    #   overnight_factor = 0.9960074518141132108440156018
-    #   model_close_prev = 0.2042534907950114369001589469
-    #   intraday_return = -0.0015406635427097734824763627
-    #   intraday_factor = 0.9951744852667137114644031522
-    #   model_open_prev = 0.2052438982499336033946819253
+    # - ANNUAL_FEE = 5%  -> daily_fee = 0.0002035241051570047
+    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
+    #   close_based_factor at next = 1.0443396938054463
+    #   model_close_prev (2010-02-10 close) = 0.20709354072560973
+    #   overnight_return for 2010-02-10 = -0.0007868476655262802
+    #   overnight_factor for 2010-02-10 = 0.9974359328982642
+    #   model_open_prev (2010-02-10 open) = 0.20805689115999584
     #
-    # - ANNUAL_FEE = 10% -> daily_fee = 0.0004180098938665269585106995
-    #   overnight_return = -0.0012630080269099403559388795
-    #   overnight_factor = 0.9957929660254036519736726620
-    #   model_close_prev = 0.2042974853526800949335125416
-    #   intraday_return = -0.0015406635427097734824763627
-    #   intraday_factor = 0.9949599994780041525940602124
-    #   model_open_prev = 0.2053323605570703691428423812
-    "0%": ("2010-02-10", 0.20516000981797294, 0.20421176217532735),
-    "5%": ("2010-02-10", 0.20524389824993358, 0.20425349079501143),
-    "10%": ("2010-02-10", 0.20533236055707035, 0.20429748535268008),
+    # - ANNUAL_FEE = 10% -> daily_fee = 0.0004180098938665333
+    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
+    #   close_based_factor at next = 1.044125208016737
+    #   model_close_prev (2010-02-10 close) = 0.2071360821958071
+    #   overnight_return for 2010-02-10 = -0.0007868476655262802
+    #   overnight_factor for 2010-02-10 = 0.9972214471095546
+    #   model_open_prev (2010-02-10 open) = 0.20809983873061952
+    "0%": ("2010-02-10", 0.2080161548942335, 0.2070531895684367),
+    "5%": ("2010-02-10", 0.2080568911599959, 0.2070935407256098),
+    "10%": ("2010-02-10", 0.20809983873061957, 0.20713608219580715),
 }
 
 

@@ -15,9 +15,15 @@ class Symbols:
 
 
 OUTPUT_DIR = Path("data")
-DAILY_FEE = 0.0005
+ANNUAL_FEE = 10.0
+TRADING_DAYS_PER_YEAR = 252
 START_DATE = "1985-10-01"
 END_DATE = "2026-01-01"
+
+
+def annual_fee_to_daily_fee(annual_fee: float, trading_days_per_year: int = TRADING_DAYS_PER_YEAR) -> float:
+    annual_fee_decimal = annual_fee / 100.0
+    return 1.0 - (1.0 - annual_fee_decimal) ** (1.0 / trading_days_per_year)
 
 
 def download_history(symbol: str, start_date: str, end_date: str | None) -> pd.DataFrame:
@@ -136,7 +142,8 @@ def main() -> None:
     symbols = Symbols()
     benchmark = download_history(symbols.benchmark, START_DATE, END_DATE)
     leverage = download_history(symbols.leverage, "2010-02-11", END_DATE)
-    combined = build_backfilled_series(benchmark, leverage, DAILY_FEE)
+    daily_fee = annual_fee_to_daily_fee(ANNUAL_FEE)
+    combined = build_backfilled_series(benchmark, leverage, daily_fee)
     write_csvs(OUTPUT_DIR, benchmark, leverage, combined)
 
     earliest = combined.iloc[0]["date"]

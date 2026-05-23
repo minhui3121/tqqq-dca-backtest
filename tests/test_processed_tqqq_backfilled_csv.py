@@ -20,63 +20,40 @@ COMMON_ROWS = {
 }
 
 ENGINEERED_FIRST_ROW = {
-    # The values below were produced by the backfill using the overnight +
-    # intraday decomposition of Nasdaq moves.  For transparency we show the
-    # derivation for the engineered row on 2010-02-10 (the day immediately
-    # before the first actual TQQQ row on 2010-02-11).
+    # Engineered row: 2010-02-10, derived from raw rows
+    #   NDX 2010-02-09 close = 1753.8399658203125
+    #   NDX 2010-02-10 open  = 1752.4599609375
+    #   NDX 2010-02-10 close = 1749.760009765625
+    #   NDX 2010-02-11 open  = 1747.550048828125
+    #   NDX 2010-02-11 close = 1775.739990234375
+    #   TQQQ 2010-02-11 open = 0.20343799889087677
     #
-    # Notation and formulas used:
-    # - ndx_close_pos  = Nasdaq close on day t (2010-02-10)
-    # - ndx_open_next  = Nasdaq open on day t+1 (2010-02-11)
-    # - ndx_open_pos   = Nasdaq open on day t (2010-02-10)
-    # - tqqq_open_next = actual TQQQ open on day t+1 (anchor = 2010-02-11)
-    # - daily_fee      = 1 - (1 - ANNUAL_FEE)^(1/252) (converted from percent)
+    # Formulas:
+    #   close_factor(t+1) = 1 + 3 * (ndx_close[t+1] / ndx_close[t] - 1) - daily_fee
+    #   close[t] = tqqq_open[t+1] / close_factor(t+1)
+    #   overnight_factor(t) = 1 + 3 * (ndx_open[t] / ndx_close[t-1] - 1) - daily_fee
+    #   open[t] = close[t-1] * overnight_factor(t)
     #
-    # Step 1 (overnight): recover previous-day TQQQ close from the next-day
-    # open using the overnight leveraged factor
-    #   overnight_return = ndx_open_next / ndx_close_pos - 1
-    #   overnight_factor = 1 + 3 * overnight_return - daily_fee
-    #   model_close_prev = tqqq_open_next / overnight_factor
+    # 0% fee
+    #   daily_fee = 0.0
+    #   close_factor(2010-02-11) = 1.0445432179106033
+    #   close[2010-02-10] = 0.20705318956843666
+    #   overnight_factor(2010-02-10) = 0.9976394570034212
+    #   open[2010-02-10] = 0.20801615489423345
     #
-    # Step 2 (intraday): recover previous-day TQQQ open from that recovered close
-    #   intraday_return = ndx_close_pos / ndx_open_pos - 1
-    #   intraday_factor = 1 + 3 * intraday_return - daily_fee
-    #   model_open_prev = model_close_prev / intraday_factor
+    # 5% fee
+    #   daily_fee = 0.0002035241051570047
+    #   close_factor(2010-02-11) = 1.0443396938054463
+    #   close[2010-02-10] = 0.20709354072560973
+    #   overnight_factor(2010-02-10) = 0.9974359328982642
+    #   open[2010-02-10] = 0.20805689115999584
     #
-    # Concrete numbers used (from `data/raw/nasdaq_100_yahoo.csv` and
-    # `data/raw/tqqq_yahoo.csv`):
-    #   ndx_close (2010-02-10 close) = 1749.760009765625
-    #   ndx_open_next (2010-02-11 open) = 1747.550048828125
-    #   ndx_open (2010-02-10 open) = 1752.4599609375
-    #   tqqq_open_next (2010-02-11 actual open) = 0.20343799889087677
-    #
-    # Using these values the backfill yields the following exact intermediates
-    # (these numbers were computed from the raw CSVs and match the produced
-    # processed CSVs):
-    #
-    # - ANNUAL_FEE = 0%  -> daily_fee = 0.0
-    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
-    #   close_based_factor at next = 1.0445432179106033
-    #   model_close_prev (2010-02-10 close) = 0.20705318956843666
-    #   overnight_return for 2010-02-10 = -0.0007868476655262802
-    #   overnight_factor for 2010-02-10 = 0.9976394570034212
-    #   model_open_prev (2010-02-10 open) = 0.20801615489423345
-    #
-    # - ANNUAL_FEE = 5%  -> daily_fee = 0.0002035241051570047
-    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
-    #   close_based_factor at next = 1.0443396938054463
-    #   model_close_prev (2010-02-10 close) = 0.20709354072560973
-    #   overnight_return for 2010-02-10 = -0.0007868476655262802
-    #   overnight_factor for 2010-02-10 = 0.9974359328982642
-    #   model_open_prev (2010-02-10 open) = 0.20805689115999584
-    #
-    # - ANNUAL_FEE = 10% -> daily_fee = 0.0004180098938665333
-    #   ndx_daily_return at next day (2010-02-11) = 0.014847739303534446
-    #   close_based_factor at next = 1.044125208016737
-    #   model_close_prev (2010-02-10 close) = 0.2071360821958071
-    #   overnight_return for 2010-02-10 = -0.0007868476655262802
-    #   overnight_factor for 2010-02-10 = 0.9972214471095546
-    #   model_open_prev (2010-02-10 open) = 0.20809983873061952
+    # 10% fee
+    #   daily_fee = 0.0004180098938665333
+    #   close_factor(2010-02-11) = 1.044125208016737
+    #   close[2010-02-10] = 0.2071360821958071
+    #   overnight_factor(2010-02-10) = 0.9972214471095546
+    #   open[2010-02-10] = 0.20809983873061952
     "0%": ("2010-02-10", 0.2080161548942335, 0.2070531895684367),
     "5%": ("2010-02-10", 0.2080568911599959, 0.2070935407256098),
     "10%": ("2010-02-10", 0.20809983873061957, 0.20713608219580715),
